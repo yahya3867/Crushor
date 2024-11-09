@@ -6,13 +6,13 @@ public class PlayerMovement : MonoBehaviour
     private SpriteRenderer sprite;
     private Animator anim;
 
-    [SerializeField] private float moveSpeed = 8f;
-    [SerializeField] private float jumpForce = 16f;
-    [SerializeField] private float dashSpeed = 25f;
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float jumpForce = 7f;
+    [SerializeField] private float dashSpeed = 20f;
     [SerializeField] private float dashDuration = 0.2f;
     [SerializeField] private float dashCooldown = 1f;
     [SerializeField] private float wallSlidingSpeed = 2f;
-    [SerializeField] private Vector2 wallJumpingPower = new Vector2(8f, 16f);
+    [SerializeField] private Vector2 wallJumpingPower = new Vector2(7f, 9f);
     [SerializeField] private float wallJumpingDuration = 0.4f;
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundLayer;
