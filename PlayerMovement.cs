@@ -22,6 +22,8 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float dashDuration = 0.15f;
     [SerializeField] private float dashCooldown = 1f;
 
+    [SerializeField] private AudioSource jumpSound; // AudioSource for jump sound
+
     private float dirX = 0f;
     private float currentSpeed = 0f;
     private float graceTime = 0.15f;
@@ -41,7 +43,7 @@ public class PlayerMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         coll = GetComponent<BoxCollider2D>();
-        sprite = GetComponent<SpriteRenderer>(); // For sprite flipping
+        sprite = GetComponent<SpriteRenderer>();
         anim = GetComponent<Animator>();
     }
 
@@ -112,7 +114,7 @@ public class PlayerMovement : MonoBehaviour
         Vector2 dashDirection = new Vector2(dirX, 0).normalized;
         if (dashDirection == Vector2.zero) dashDirection = Vector2.right * Mathf.Sign(transform.localScale.x);
 
-        rb.velocity = dashDirection * dashSpeed;
+        rb.linearVelocity = dashDirection * dashSpeed;
         Invoke(nameof(ResetDash), dashDuration);
     }
 
@@ -125,7 +127,7 @@ public class PlayerMovement : MonoBehaviour
     {
         if (isDucking)
         {
-            rb.velocity = new Vector2(0, rb.velocity.y);
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
             return;
         }
 
@@ -140,7 +142,7 @@ public class PlayerMovement : MonoBehaviour
             currentSpeed = Mathf.MoveTowards(currentSpeed, 0, deceleration * Time.fixedDeltaTime);
         }
 
-        rb.velocity = new Vector2(currentSpeed, rb.velocity.y);
+        rb.linearVelocity = new Vector2(currentSpeed, rb.linearVelocity.y);
 
         // Flip sprite based on movement direction
         if (dirX > 0)
@@ -153,24 +155,33 @@ public class PlayerMovement : MonoBehaviour
     {
         if (jumpBufferTimer > 0 && graceTimer > 0 && !isDucking)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
             jumpBufferTimer = 0;
             graceTimer = 0;
+
+            if (jumpSound != null)
+            {
+                jumpSound.Play(); // Play jump sound
+            }
+            else
+            {
+                Debug.LogWarning("Jump sound not assigned!");
+            }
         }
 
-        if (Input.GetButtonUp("Jump") && rb.velocity.y > minJumpForce)
+        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > minJumpForce)
         {
-            rb.velocity = new Vector2(rb.velocity.x, minJumpForce);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, minJumpForce);
         }
     }
 
     private void ApplyFallModifiers()
     {
-        if (rb.velocity.y < 0)
+        if (rb.linearVelocity.y < 0)
         {
             rb.gravityScale = fallMultiplier;
         }
-        else if (rb.velocity.y > 0 && !Input.GetButton("Jump"))
+        else if (rb.linearVelocity.y > 0 && !Input.GetButton("Jump"))
         {
             rb.gravityScale = lowJumpMultiplier;
         }
@@ -188,22 +199,22 @@ public class PlayerMovement : MonoBehaviour
             moveSpeed = Mathf.Clamp(moveSpeed, 5f, 8f);
         }
 
-        if (rb.velocity.y < maxFallSpeed)
+        if (rb.linearVelocity.y < maxFallSpeed)
         {
-            rb.velocity = new Vector2(rb.velocity.x, maxFallSpeed);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
         }
     }
 
     private bool IsInApex()
     {
-        return Mathf.Abs(rb.velocity.y) < 0.1f && !IsGrounded();
+        return Mathf.Abs(rb.linearVelocity.y) < 0.1f && !IsGrounded();
     }
 
     private void ApplyWallSlide()
     {
-        if (!IsGrounded() && rb.velocity.y <= 0)
+        if (!IsGrounded() && rb.linearVelocity.y <= 0)
         {
-            rb.velocity = new Vector2(rb.velocity.x * 0.9f, rb.velocity.y);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.9f, rb.linearVelocity.y);
         }
     }
 
@@ -224,11 +235,11 @@ public class PlayerMovement : MonoBehaviour
             state = MovementState.idle;
         }
 
-        if (rb.velocity.y > 0.1f)
+        if (rb.linearVelocity.y > 0.1f)
         {
             state = MovementState.jumping;
         }
-        else if (rb.velocity.y < -0.1f)
+        else if (rb.linearVelocity.y < -0.1f)
         {
             state = MovementState.falling;
         }
