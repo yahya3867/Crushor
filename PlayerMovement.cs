@@ -8,24 +8,31 @@ public class PlayerMovement : MonoBehaviour
     private Animator anim;
 
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpForce = 12f; // Base jump force
-    [SerializeField] private float minJumpForce = 5f; // Variable jump height (hold for max, release for min)
-    [SerializeField] private float apexBoost = 1.5f; // Apex modifier for smoother jump
-    [SerializeField] private float fallMultiplier = 2.5f; // Increase gravity when falling
-    [SerializeField] private float lowJumpMultiplier = 2f; // Increase gravity for short jumps
-    [SerializeField] private float maxFallSpeed = -10f; // Clamped fall speed
-    [SerializeField] private float acceleration = 15f; 
-    [SerializeField] private float deceleration = 20f; 
-    [SerializeField] private float duckSpeed = 2f; 
+    [SerializeField] private float jumpForce = 12f;
+    [SerializeField] private float minJumpForce = 5f;
+    [SerializeField] private float apexBoost = 1.5f;
+    [SerializeField] private float fallMultiplier = 2.5f;
+    [SerializeField] private float lowJumpMultiplier = 2f;
+    [SerializeField] private float maxFallSpeed = -10f;
+    [SerializeField] private float acceleration = 15f;
+    [SerializeField] private float deceleration = 20f;
     [SerializeField] private LayerMask groundLayer;
+
+    [SerializeField] private float dashSpeed = 25f;
+    [SerializeField] private float dashDuration = 0.15f;
+    [SerializeField] private float dashCooldown = 1f;
 
     private float dirX = 0f;
     private float currentSpeed = 0f;
-    private float graceTime = 0.15f; // Coyote time duration
+    private float graceTime = 0.15f;
     private float graceTimer;
-    private float jumpBufferTime = 0.2f; // Time allowed for jump buffering
+    private float jumpBufferTime = 0.2f;
     private float jumpBufferTimer;
     private bool isDucking = false;
+
+    private bool isDashing = false;
+    private float dashTimer;
+    private float dashCooldownTimer;
 
     private MovementState currentState;
     private enum MovementState { idle, running, jumping, falling, ducking }
@@ -34,7 +41,7 @@ public class PlayerMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         coll = GetComponent<BoxCollider2D>();
-        sprite = GetComponent<SpriteRenderer>();
+        sprite = GetComponent<SpriteRenderer>(); // For sprite flipping
         anim = GetComponent<Animator>();
     }
 
@@ -46,9 +53,12 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (isDashing) return;
+
         ApplyMovement();
         ApplyJump();
         ApplyFallModifiers();
+        ApplyWallSlide();
     }
 
     private void HandleInput()
@@ -66,7 +76,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (IsGrounded())
         {
-            graceTimer = graceTime; // Reset coyote time
+            graceTimer = graceTime;
         }
         else
         {
@@ -75,17 +85,51 @@ public class PlayerMovement : MonoBehaviour
 
         if (Input.GetButtonDown("Jump"))
         {
-            jumpBufferTimer = jumpBufferTime; // Start jump buffering
+            jumpBufferTimer = jumpBufferTime;
         }
         else
         {
             jumpBufferTimer -= Time.deltaTime;
         }
+
+        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing && !isDucking)
+        {
+            StartDash();
+        }
+
+        if (dashCooldownTimer > 0f)
+        {
+            dashCooldownTimer -= Time.deltaTime;
+        }
+    }
+
+    private void StartDash()
+    {
+        isDashing = true;
+        dashTimer = dashDuration;
+        dashCooldownTimer = dashCooldown;
+
+        Vector2 dashDirection = new Vector2(dirX, 0).normalized;
+        if (dashDirection == Vector2.zero) dashDirection = Vector2.right * Mathf.Sign(transform.localScale.x);
+
+        rb.velocity = dashDirection * dashSpeed;
+        Invoke(nameof(ResetDash), dashDuration);
+    }
+
+    private void ResetDash()
+    {
+        isDashing = false;
     }
 
     private void ApplyMovement()
     {
-        float targetSpeed = isDucking ? dirX * duckSpeed : dirX * moveSpeed;
+        if (isDucking)
+        {
+            rb.velocity = new Vector2(0, rb.velocity.y);
+            return;
+        }
+
+        float targetSpeed = dirX * moveSpeed;
 
         if (dirX != 0)
         {
@@ -96,33 +140,37 @@ public class PlayerMovement : MonoBehaviour
             currentSpeed = Mathf.MoveTowards(currentSpeed, 0, deceleration * Time.fixedDeltaTime);
         }
 
-        rb.linearVelocity = new Vector2(currentSpeed, rb.linearVelocity.y);
+        rb.velocity = new Vector2(currentSpeed, rb.velocity.y);
+
+        // Flip sprite based on movement direction
+        if (dirX > 0)
+            sprite.flipX = false;
+        else if (dirX < 0)
+            sprite.flipX = true;
     }
 
     private void ApplyJump()
     {
         if (jumpBufferTimer > 0 && graceTimer > 0 && !isDucking)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-            jumpBufferTimer = 0; // Consume jump buffer
-            graceTimer = 0; // Consume coyote time
+            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            jumpBufferTimer = 0;
+            graceTimer = 0;
         }
 
-        // Apply variable jump height using minJumpForce
-        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > minJumpForce)
+        if (Input.GetButtonUp("Jump") && rb.velocity.y > minJumpForce)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, minJumpForce);
+            rb.velocity = new Vector2(rb.velocity.x, minJumpForce);
         }
     }
 
-
     private void ApplyFallModifiers()
     {
-        if (rb.linearVelocity.y < 0) // Falling
+        if (rb.velocity.y < 0)
         {
             rb.gravityScale = fallMultiplier;
         }
-        else if (rb.linearVelocity.y > 0 && !Input.GetButton("Jump")) // Short jump
+        else if (rb.velocity.y > 0 && !Input.GetButton("Jump"))
         {
             rb.gravityScale = lowJumpMultiplier;
         }
@@ -131,26 +179,32 @@ public class PlayerMovement : MonoBehaviour
             rb.gravityScale = 1f;
         }
 
-        // Apply Apex Modifier (for smoother height transition)
         if (IsInApex())
         {
             moveSpeed += apexBoost * Time.fixedDeltaTime;
         }
         else
         {
-            moveSpeed = Mathf.Clamp(moveSpeed, 5f, 8f); // Reset base after apex boosts
+            moveSpeed = Mathf.Clamp(moveSpeed, 5f, 8f);
         }
 
-        // Clamp fall speed
-        if (rb.linearVelocity.y < maxFallSpeed)
+        if (rb.velocity.y < maxFallSpeed)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
+            rb.velocity = new Vector2(rb.velocity.x, maxFallSpeed);
         }
     }
 
     private bool IsInApex()
     {
-        return Mathf.Abs(rb.linearVelocity.y) < 0.1f && !IsGrounded();
+        return Mathf.Abs(rb.velocity.y) < 0.1f && !IsGrounded();
+    }
+
+    private void ApplyWallSlide()
+    {
+        if (!IsGrounded() && rb.velocity.y <= 0)
+        {
+            rb.velocity = new Vector2(rb.velocity.x * 0.9f, rb.velocity.y);
+        }
     }
 
     private void UpdateAnimationState()
@@ -161,26 +215,20 @@ public class PlayerMovement : MonoBehaviour
         {
             state = MovementState.ducking;
         }
-        else if (dirX > 0f)
+        else if (dirX > 0f || dirX < 0f)
         {
             state = MovementState.running;
-            sprite.flipX = false;
-        }
-        else if (dirX < 0f)
-        {
-            state = MovementState.running;
-            sprite.flipX = true;
         }
         else
         {
             state = MovementState.idle;
         }
 
-        if (rb.linearVelocity.y > 0.1f)
+        if (rb.velocity.y > 0.1f)
         {
             state = MovementState.jumping;
         }
-        else if (rb.linearVelocity.y < -0.1f)
+        else if (rb.velocity.y < -0.1f)
         {
             state = MovementState.falling;
         }
