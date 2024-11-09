@@ -3,70 +3,138 @@ using UnityEngine;
 public class PlayerMovement : MonoBehaviour
 {
     private Rigidbody2D rb;
-    private BoxCollider2D coll;
     private SpriteRenderer sprite;
     private Animator anim;
 
-    [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpForce = 12f;
-    [SerializeField] private float minJumpForce = 5f;
-    [SerializeField] private float apexBoost = 1.5f;
-    [SerializeField] private float fallMultiplier = 2.5f;
-    [SerializeField] private float lowJumpMultiplier = 2f;
-    [SerializeField] private float maxFallSpeed = -10f;
-    [SerializeField] private float acceleration = 15f;
-    [SerializeField] private float deceleration = 20f;
-    [SerializeField] private LayerMask groundLayer;
-
+    [SerializeField] private float moveSpeed = 8f;
+    [SerializeField] private float jumpForce = 16f;
     [SerializeField] private float dashSpeed = 25f;
-    [SerializeField] private float dashDuration = 0.15f;
+    [SerializeField] private float dashDuration = 0.2f;
     [SerializeField] private float dashCooldown = 1f;
+    [SerializeField] private float wallSlidingSpeed = 2f;
+    [SerializeField] private Vector2 wallJumpingPower = new Vector2(8f, 16f);
+    [SerializeField] private float wallJumpingDuration = 0.4f;
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private Transform wallCheck;
+    [SerializeField] private LayerMask wallLayer;
 
-    [SerializeField] private AudioSource jumpSound; // AudioSource for jump sound
-
-    private float dirX = 0f;
-    private float currentSpeed = 0f;
-    private float graceTime = 0.15f;
-    private float graceTimer;
-    private float jumpBufferTime = 0.2f;
-    private float jumpBufferTimer;
+    private float horizontal;
+    private bool isFacingRight = true;
+    private bool isWallSliding;
+    private bool isWallJumping;
+    private bool isDashing;
+    private float dashCooldownTimer;
     private bool isDucking = false;
 
-    private bool isDashing = false;
-    private float dashTimer;
-    private float dashCooldownTimer;
-
     private MovementState currentState;
-    private enum MovementState { idle, running, jumping, falling, ducking }
+    private enum MovementState { idle, running, jumping, falling, ducking, wallSliding}
 
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        coll = GetComponent<BoxCollider2D>();
         sprite = GetComponent<SpriteRenderer>();
         anim = GetComponent<Animator>();
     }
 
     private void Update()
     {
-        HandleInput();
+        horizontal = Input.GetAxisRaw("Horizontal");
+
+        if (Input.GetButtonDown("Jump") && IsGrounded() && !isWallJumping && !isDashing)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        }
+
+        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
+        {
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
+        }
+
+        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing)
+        {
+            StartDash();
+        }
+
+        WallSlide();
+        if (isWallSliding)
+        {
+            WallJump();
+        }
+
+        HandleDucking();
+
+        if (!isWallJumping && !isDashing)
+        {
+            Flip();
+        }
+
         UpdateAnimationState();
     }
 
     private void FixedUpdate()
     {
-        if (isDashing) return;
-
-        ApplyMovement();
-        ApplyJump();
-        ApplyFallModifiers();
-        ApplyWallSlide();
+        if (!isWallJumping && !isDashing && !isDucking)
+        {
+            rb.linearVelocity = new Vector2(horizontal * moveSpeed, rb.linearVelocity.y);
+        }
     }
 
-    private void HandleInput()
+    private bool IsGrounded()
     {
-        dirX = Input.GetAxisRaw("Horizontal");
+        return Physics2D.OverlapCircle(groundCheck.position, 0.2f, groundLayer);
+    }
 
+    private bool IsWalled()
+    {
+        return Physics2D.OverlapCircle(wallCheck.position, 0.2f, wallLayer);
+    }
+
+    private void WallSlide()
+    {
+        if (IsWalled() && !IsGrounded() && horizontal != 0f)
+        {
+            isWallSliding = true;
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -wallSlidingSpeed, float.MaxValue));
+        }
+        else
+        {
+            isWallSliding = false;
+        }
+    }
+
+    private void WallJump()
+    {
+        if (Input.GetButtonDown("Jump"))
+        {
+            isWallJumping = true;
+            float wallJumpDirection = -Mathf.Sign(transform.localScale.x);
+            rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpingPower.x, wallJumpingPower.y);
+
+            Invoke(nameof(StopWallJumping), wallJumpingDuration);
+        }
+    }
+
+    private void StopWallJumping()
+    {
+        isWallJumping = false;
+    }
+
+    private void StartDash()
+    {
+        isDashing = true;
+        rb.linearVelocity = new Vector2(horizontal * dashSpeed, 0f);
+        Invoke(nameof(StopDash), dashDuration);
+        dashCooldownTimer = dashCooldown;
+    }
+
+    private void StopDash()
+    {
+        isDashing = false;
+    }
+
+    private void HandleDucking()
+    {
         if (Input.GetKey(KeyCode.S) && IsGrounded())
         {
             isDucking = true;
@@ -75,146 +143,16 @@ public class PlayerMovement : MonoBehaviour
         {
             isDucking = false;
         }
-
-        if (IsGrounded())
-        {
-            graceTimer = graceTime;
-        }
-        else
-        {
-            graceTimer -= Time.deltaTime;
-        }
-
-        if (Input.GetButtonDown("Jump"))
-        {
-            jumpBufferTimer = jumpBufferTime;
-        }
-        else
-        {
-            jumpBufferTimer -= Time.deltaTime;
-        }
-
-        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing && !isDucking)
-        {
-            StartDash();
-        }
-
-        if (dashCooldownTimer > 0f)
-        {
-            dashCooldownTimer -= Time.deltaTime;
-        }
     }
 
-    private void StartDash()
+    private void Flip()
     {
-        isDashing = true;
-        dashTimer = dashDuration;
-        dashCooldownTimer = dashCooldown;
-
-        Vector2 dashDirection = new Vector2(dirX, 0).normalized;
-        if (dashDirection == Vector2.zero) dashDirection = Vector2.right * Mathf.Sign(transform.localScale.x);
-
-        rb.linearVelocity = dashDirection * dashSpeed;
-        Invoke(nameof(ResetDash), dashDuration);
-    }
-
-    private void ResetDash()
-    {
-        isDashing = false;
-    }
-
-    private void ApplyMovement()
-    {
-        if (isDucking)
+        if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f)
         {
-            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
-            return;
-        }
-
-        float targetSpeed = dirX * moveSpeed;
-
-        if (dirX != 0)
-        {
-            currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, acceleration * Time.fixedDeltaTime);
-        }
-        else
-        {
-            currentSpeed = Mathf.MoveTowards(currentSpeed, 0, deceleration * Time.fixedDeltaTime);
-        }
-
-        rb.linearVelocity = new Vector2(currentSpeed, rb.linearVelocity.y);
-
-        // Flip sprite based on movement direction
-        if (dirX > 0)
-            sprite.flipX = false;
-        else if (dirX < 0)
-            sprite.flipX = true;
-    }
-
-    private void ApplyJump()
-    {
-        if (jumpBufferTimer > 0 && graceTimer > 0 && !isDucking)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-            jumpBufferTimer = 0;
-            graceTimer = 0;
-
-            if (jumpSound != null)
-            {
-                jumpSound.Play(); // Play jump sound
-            }
-            else
-            {
-                Debug.LogWarning("Jump sound not assigned!");
-            }
-        }
-
-        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > minJumpForce)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, minJumpForce);
-        }
-    }
-
-    private void ApplyFallModifiers()
-    {
-        if (rb.linearVelocity.y < 0)
-        {
-            rb.gravityScale = fallMultiplier;
-        }
-        else if (rb.linearVelocity.y > 0 && !Input.GetButton("Jump"))
-        {
-            rb.gravityScale = lowJumpMultiplier;
-        }
-        else
-        {
-            rb.gravityScale = 1f;
-        }
-
-        if (IsInApex())
-        {
-            moveSpeed += apexBoost * Time.fixedDeltaTime;
-        }
-        else
-        {
-            moveSpeed = Mathf.Clamp(moveSpeed, 5f, 8f);
-        }
-
-        if (rb.linearVelocity.y < maxFallSpeed)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, maxFallSpeed);
-        }
-    }
-
-    private bool IsInApex()
-    {
-        return Mathf.Abs(rb.linearVelocity.y) < 0.1f && !IsGrounded();
-    }
-
-    private void ApplyWallSlide()
-    {
-        if (!IsGrounded() && rb.linearVelocity.y <= 0)
-        {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.9f, rb.linearVelocity.y);
+            isFacingRight = !isFacingRight;
+            Vector3 localScale = transform.localScale;
+            localScale.x *= -1f;
+            transform.localScale = localScale;
         }
     }
 
@@ -222,26 +160,29 @@ public class PlayerMovement : MonoBehaviour
     {
         MovementState state;
 
-        if (isDucking)
+        if (isWallSliding)
+        {
+            state = MovementState.wallSliding;
+        }
+        else if (isDucking)
         {
             state = MovementState.ducking;
         }
-        else if (dirX > 0f || dirX < 0f)
-        {
-            state = MovementState.running;
-        }
-        else
-        {
-            state = MovementState.idle;
-        }
-
-        if (rb.linearVelocity.y > 0.1f)
+        else if (rb.linearVelocity.y > 0.1f)
         {
             state = MovementState.jumping;
         }
         else if (rb.linearVelocity.y < -0.1f)
         {
             state = MovementState.falling;
+        }
+        else if (horizontal != 0f)
+        {
+            state = MovementState.running;
+        }
+        else
+        {
+            state = MovementState.idle;
         }
 
         if (state != currentState)
@@ -251,8 +192,11 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    private bool IsGrounded()
+    private void LateUpdate()
     {
-        return Physics2D.BoxCast(coll.bounds.center, coll.bounds.size, 0f, Vector2.down, 0.2f, groundLayer);
+        if (dashCooldownTimer > 0f)
+        {
+            dashCooldownTimer -= Time.deltaTime;
+        }
     }
 }
