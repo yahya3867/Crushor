@@ -19,6 +19,8 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Transform wallCheck;
     [SerializeField] private LayerMask wallLayer;
 
+    [SerializeField] private AudioSource jumpSound; // AudioSource for jump sound
+
     private float horizontal;
     private bool isFacingRight = true;
     private bool isWallSliding;
@@ -28,7 +30,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isDucking = false;
 
     private MovementState currentState;
-    private enum MovementState { idle, running, jumping, falling, ducking, wallSliding}
+    private enum MovementState { idle, running, jumping, falling, ducking, wallSliding }
 
     private void Start()
     {
@@ -44,6 +46,7 @@ public class PlayerMovement : MonoBehaviour
         if (Input.GetButtonDown("Jump") && IsGrounded() && !isWallJumping && !isDashing)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            PlayJumpSound(); // Play jump sound when the player jumps
         }
 
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
@@ -112,6 +115,7 @@ public class PlayerMovement : MonoBehaviour
             rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpingPower.x, wallJumpingPower.y);
 
             Invoke(nameof(StopWallJumping), wallJumpingDuration);
+            PlayJumpSound(); // Play jump sound during wall jump
         }
     }
 
@@ -197,6 +201,18 @@ public class PlayerMovement : MonoBehaviour
         if (dashCooldownTimer > 0f)
         {
             dashCooldownTimer -= Time.deltaTime;
+        }
+    }
+
+    private void PlayJumpSound()
+    {
+        if (jumpSound != null)
+        {
+            jumpSound.Play();
+        }
+        else
+        {
+            Debug.LogWarning("Jump sound is not assigned!");
         }
     }
 }
