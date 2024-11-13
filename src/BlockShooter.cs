@@ -10,8 +10,8 @@ public class BlockShooter : MonoBehaviour
     {
         animator = GetComponent<Animator>();
 
-        // Shoot fireballs every 5 seconds
-        InvokeRepeating("ShootFireball", 0f, 2f);
+        // Shoot fireballs every 2 seconds
+        InvokeRepeating(nameof(ShootFireball), 0f, 2f);
     }
 
     void ShootFireball()
@@ -26,13 +26,6 @@ public class BlockShooter : MonoBehaviour
 
         // Initialize the fireball's direction
         fireball.GetComponent<FireballBehavior>().Initialize(direction);
-
-        // Close mouth animation after delay
-        Invoke("CloseMouth", 0.5f);
-    }
-
-    void CloseMouth()
-    {
-        animator.SetTrigger("CloseMouth");
+        // Automatically return to CloseMouth (no need to manually invoke CloseMouth)
     }
 }
