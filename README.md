@@ -1,6 +1,6 @@
 # Crushor 🎮  
 
-**Crushor** is a work-in-progress game that I'm building just for fun. Right now I'm just experimenting with different mechanics.  
+**Crushor** is a first attempt of a working retro-style 2D Platformer Game that I'm building just for fun. Right now I'm just experimenting with different mechanics.  
 
 Eventually, I plan to incorporate **Reinforcement Learning (RL)** into the game—training AI to play, adapt, and (hopefully) dominate the gameplay. But for now, it's all about messing around and seeing where things go.  
 
