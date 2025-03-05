@@ -8,7 +8,10 @@ More updates to come!
 
 # Demo Video
 
-https://github.com/user-attachments/assets/b265602b-cb01-44cf-b79f-c27d9a9f08c7
+
+
+https://github.com/user-attachments/assets/cb26d187-edad-4743-b462-f49e00132b11
+
 
 ## Stay Tuned!  
 If you're curious, feel free to check back later as I add more features and refine things.  
